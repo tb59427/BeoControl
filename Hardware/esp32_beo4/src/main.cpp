@@ -55,6 +55,8 @@ static char    serialCmdBuf[CMD_BUF_SIZE];
 static uint8_t serialCmdLen = 0;
 static char    btCmdBuf[CMD_BUF_SIZE];
 static uint8_t btCmdLen = 0;
+//-- BL E heartbeat timestamp --
+static unsigned long lastHeartbeat = 0;
 
 static void printStartup(Channel& channel, bool irReady) {
     channel.print("===> start beo4... ");
@@ -115,4 +117,9 @@ if (Serial) {
 void loop() {
     pollChannel(serialCh, serialCmdBuf, serialCmdLen);
     pollChannel(btCh, btCmdBuf, btCmdLen);
+
+     if (btCh.connected() && millis() - lastHeartbeat >= 5000) {
+         lastHeartbeat = millis();
+         btCh.println("HB");
+     }
 }

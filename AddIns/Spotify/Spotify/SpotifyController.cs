@@ -57,34 +57,51 @@ public sealed class SpotifyController : IDisposable
         var tokenPath = GetTokenPath();
         var token = await AuthenticateAsync(settings, tokenPath);
 
-        var authenticator = new PKCEAuthenticator(settings.ClientId, token);
-        authenticator.TokenRefreshed += (_, refreshedToken) =>
-        {
-            File.WriteAllText(tokenPath, JsonSerializer.Serialize(refreshedToken, JsonOptions));
-        };
-
-        var spotify = new SpotifyClient(SpotifyClientConfig.CreateDefault().WithAuthenticator(authenticator));
+        if (string.IsNullOrWhiteSpace(token.RefreshToken))
+            token = await AuthenticateAsync(settings, tokenPath, forceLogin: true);
 
         try
         {
-            var me = await spotify.UserProfile.Current();
-            var devicesResponse = await spotify.Player.GetAvailableDevices();
-            var devices = devicesResponse.Devices ?? [];
-            return new SpotifyConnection(spotify, me.DisplayName ?? me.Id, devices);
+            return await CreateConnectionAsync(settings.ClientId, tokenPath, token);
         }
-        catch (APITooManyRequestsException ex)
+        catch (APIException ex) when (RequiresNewLogin(ex))
         {
-            var wait = ex.RetryAfter;
-            Console.WriteLine($"Rate limit hit. Waiting {wait} seconds...");
-            throw new InvalidOperationException($"Rate limit hit. Waiting {wait.TotalHours} hours...", ex);
-
-            //return null;
-
+            Console.WriteLine("Spotify authorization is no longer valid. Starting a new login.");
+            token = await AuthenticateAsync(settings, tokenPath, forceLogin: true);
+            return await CreateConnectionAsync(settings.ClientId, tokenPath, token);
         }
-        catch (APIException ex)
+    }
+
+    private static async Task<SpotifyConnection> CreateConnectionAsync(
+        string clientId,
+        string tokenPath,
+        PKCETokenResponse token)
+    {
+        var refreshToken = token.RefreshToken;
+        var authenticator = new PKCEAuthenticator(clientId, token);
+        authenticator.TokenRefreshed += (_, refreshedToken) =>
         {
-            throw new InvalidOperationException($"Spotify API error: {ex.Message}", ex);
-        }
+            if (string.IsNullOrWhiteSpace(refreshedToken.RefreshToken))
+                refreshedToken.RefreshToken = refreshToken;
+            else
+                refreshToken = refreshedToken.RefreshToken;
+
+            SaveToken(tokenPath, refreshedToken);
+        };
+
+        var spotify = new SpotifyClient(
+            SpotifyClientConfig.CreateDefault().WithAuthenticator(authenticator));
+        var me = await spotify.UserProfile.Current();
+        var devicesResponse = await spotify.Player.GetAvailableDevices();
+        var devices = devicesResponse.Devices ?? [];
+
+        return new SpotifyConnection(spotify, me.DisplayName ?? me.Id, devices);
+    }
+
+    private static bool RequiresNewLogin(APIException exception)
+    {
+        return exception is APIUnauthorizedException
+            || string.Equals(exception.Message, "invalid_grant", StringComparison.OrdinalIgnoreCase);
     }
 
     public async Task<string> ExecuteAsync(SpotifyPlaybackCommand command)
@@ -233,9 +250,12 @@ public sealed class SpotifyController : IDisposable
         return Path.Combine(tokenDirectory, TokenFileName);
     }
 
-    private static async Task<PKCETokenResponse> AuthenticateAsync(SpotifyAppSettings settings, string tokenPath)
+    private static async Task<PKCETokenResponse> AuthenticateAsync(
+        SpotifyAppSettings settings,
+        string tokenPath,
+        bool forceLogin = false)
     {
-        if (File.Exists(tokenPath))
+        if (!forceLogin && File.Exists(tokenPath))
         {
             try
             {
@@ -266,7 +286,7 @@ public sealed class SpotifyController : IDisposable
                 var token = await new OAuthClient().RequestToken(
                     new PKCETokenRequest(settings.ClientId, response.Code, redirectUri, verifier));
 
-                File.WriteAllText(tokenPath, JsonSerializer.Serialize(token, JsonOptions));
+                SaveToken(tokenPath, token);
                 completion.TrySetResult(token);
             }
             catch (APIException ex)
@@ -316,5 +336,10 @@ public sealed class SpotifyController : IDisposable
         {
             server.Dispose();
         }
+    }
+
+    private static void SaveToken(string tokenPath, PKCETokenResponse token)
+    {
+        File.WriteAllText(tokenPath, JsonSerializer.Serialize(token, JsonOptions));
     }
 }
