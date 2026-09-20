@@ -137,7 +137,43 @@ public sealed class SpotifyController : IDisposable
                 case SpotifyPlaybackCommand.Previous:
                     return await RestartOrSkipPreviousAsync();
 
+                case SpotifyPlaybackCommand.PreviousPlaylist:
+                    return await PlayRelativePlaylistAsync("previous");
+
+                case SpotifyPlaybackCommand.NextPlaylist:
+                    return await PlayRelativePlaylistAsync("next");
+
+
+                //case SpotifyPlaybackCommand.PlaySongNr:
+                //    try
+                //    {
+
+                //        var playback = await _spotify.Player.GetCurrentPlayback();
+                //        var playlistId = playback.Context.Uri["spotify:playlist:".Length..];
+
+                //        var items = await _spotify.Playlists.GetPlaylistItems(playlistId);
+
+                //        await _spotify.Player.ResumePlayback(new PlayerResumePlaybackRequest
+                //        {
+                //            DeviceId = SelectedDevice.Id,
+                //            ContextUri = $"spotify:playlist:{playlistId}",
+                //            OffsetParam = new PlayerResumePlaybackRequest.Offset
+                //            {
+                //                Position = 4 // 5. Song
+                //            }
+                //        });
+
+                //        return $"Playlists retrieved:  {playlistId}";
+                //    }
+                //    catch (Exception ex)
+                //    {
+                //        string s = ex.ToString();
+                //        return s;
+                //    }
+                //    break;
+
                 default:
+
                     throw new InvalidOperationException("Unknown command. Use: play, pause, next, prev, quit");
             }
         }
@@ -147,6 +183,35 @@ public sealed class SpotifyController : IDisposable
             //throw new InvalidOperationException($"Spotify API error: {ex.Message}", ex);
         }
     }
+    public async Task<string> PlayRelativePlaylistAsync(string direction)
+    {
+        var playback = await _spotify.Player.GetCurrentPlayback();
+        var currentPlaylistId = playback.Context.Uri["spotify:playlist:".Length..];
+
+        var playlists = await _spotify.Playlists.CurrentUsers();
+        var list = playlists.Items;
+
+        var currentIndex = list.FindIndex(p => p.Id == currentPlaylistId);
+
+        var nextIndex = direction == "next"
+            ? (currentIndex + 1) % list.Count
+            : (currentIndex - 1 + list.Count) % list.Count;
+
+        var nextPlaylistId = list[nextIndex].Id;
+
+        await _spotify.Player.ResumePlayback(new PlayerResumePlaybackRequest
+        {
+            DeviceId = SelectedDevice.Id,
+            ContextUri = $"spotify:playlist:{nextPlaylistId}",
+            OffsetParam = new PlayerResumePlaybackRequest.Offset
+            {
+                Position = 0 // Song 1
+            }
+        });
+
+        return list[nextIndex].Name;
+    }
+
 
     private async Task<string> RestartOrSkipPreviousAsync()
     {
