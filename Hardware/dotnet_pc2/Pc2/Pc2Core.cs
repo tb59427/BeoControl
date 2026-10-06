@@ -52,6 +52,11 @@ public sealed class Pc2Core : IDisposable
         Beolink.TelegramReceived = t => OnTelegram?.Invoke(t);
         Beolink.StartupSourceDetect = _ =>
         {
+            // The first AUDIO_BUS answer can arrive long after startup (e.g. on the first source
+            // change when nothing played at startup). Apply the default source only if nothing
+            // has chosen a source since; otherwise it would switch a playing ML source to PC.
+            if (Mixer.TransmittingLocally || Mixer.TransmittingFromMl)
+                return;
             switch (AudioSetup.DefaultSource)
             {
                 case Pc2DefaultSource.PC:
