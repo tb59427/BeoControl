@@ -34,6 +34,23 @@ app.UseHttpsRedirection();
 app.UseAntiforgery();
 
 app.MapStaticAssets();
+
+// Small HTTP API for local automation (e.g. a menu bar app switching the PC2 to the local input
+// during a call). Same access as the web UI: no authentication.
+app.MapGet("/api/status", (DeviceService ds) => Results.Ok(new
+{
+    connected = ds.IsConnected,
+    device = ds.CurrentDevice?.Type.ToString(),
+    pc2 = ds.Pc2Routing,
+})).DisableAntiforgery();
+
+app.MapPost("/api/command/{cmd}", (string cmd, string? arg, DeviceService ds) =>
+{
+    if (!ds.IsConnected)
+        return Results.Problem("No device connected", statusCode: 503);
+    ds.SendCommand(cmd, arg);
+    return Results.Ok(new { ok = true, pc2 = ds.Pc2Routing });
+}).DisableAntiforgery();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
