@@ -13,6 +13,7 @@ public sealed class Pc2Device : IDevice
 {
     private readonly Pc2Core _core;
     private CancellationTokenSource? _cts;
+    private SourceStatusMessage? _lastMlSource;   // last source reported from Masterlink
 
     public bool IsConnected { get; private set; }
     public DeviceInfo Info { get; private set; } = new(DeviceType.PC2, "PC2", null);
@@ -48,9 +49,6 @@ public sealed class Pc2Device : IDevice
         };
         _core.OnSourceChanged = (sourceId, channel) =>
         {
-            if (_core.Mixer.TransmittingLocally && !_core.Mixer.TransmittingFromMl)
-                return;
-
             var command = SourceNames.CommandFromId(sourceId);
             if (string.IsNullOrWhiteSpace(command))
             {
@@ -58,7 +56,12 @@ public sealed class Pc2Device : IDevice
                 return;
             }
 
-            OnStatusChanged?.Invoke(new SourceStatusMessage(command, channel));
+            // Remember it even while the local input plays, so "on" can show it again.
+            _lastMlSource = new SourceStatusMessage(command, channel);
+            if (_core.Mixer.TransmittingLocally && !_core.Mixer.TransmittingFromMl)
+                return;
+
+            OnStatusChanged?.Invoke(_lastMlSource);
         };
 
     }
@@ -106,6 +109,9 @@ public sealed class Pc2Device : IDevice
 
         if (string.Equals(cmd, "pc", StringComparison.OrdinalIgnoreCase))
             OnStatusChanged?.Invoke(new SourceStatusMessage("pc"));
+        // Back from the local input: the Masterlink source doesn't report itself again by itself.
+        else if (string.Equals(cmd, "on", StringComparison.OrdinalIgnoreCase) && _lastMlSource is not null)
+            OnStatusChanged?.Invoke(_lastMlSource);
 
         if (!string.Equals(cmd, "store", StringComparison.OrdinalIgnoreCase) && !_core.RunCommand("store", 0))
             OnLog?.Invoke(new LogMessage(LogLevel.Warning, "PC2: automatic store command failed"));
