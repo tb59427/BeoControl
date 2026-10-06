@@ -128,6 +128,7 @@ public class DeviceService : IDisposable
         {
             ReplaceDevice(null);
             var device = new Pc2Device(Settings.ToAudioSetup());
+            device.OnLog += m => Console.WriteLine($"{DateTime.Now:HH:mm:ss.fff} [{m.Level}] {m.Text}");  // local debugging
             await device.Connect();
             ReplaceDevice(device);
             PersistDevice();
