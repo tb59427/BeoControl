@@ -27,6 +27,13 @@ public sealed class Pc2Device : IDevice
     /// <summary>Raised when the current PC2 audio setup changes.</summary>
     public event Action<AudioSetup>? OnAudioSetupChanged;
 
+    /// <summary>Current speaker and audio routing state of the PC2.</summary>
+    public Pc2RoutingState Routing => new(
+        _core.Mixer.SpeakersOn,
+        _core.Mixer.SpeakersMuted,
+        _core.Mixer.TransmittingFromMl,
+        _core.Mixer.TransmittingLocally);
+
     /// <summary>Current audio parameters (vol/bass/treble/balance/loudness).</summary>
     public AudioSetup CurrentAudioSetup => _core.AudioSetup;
 
@@ -120,3 +127,6 @@ public sealed class Pc2Device : IDevice
         _core.Dispose();
     }
 }
+
+/// <summary>PC2 speaker and routing state: what the speakers play (Masterlink and/or the local input).</summary>
+public sealed record Pc2RoutingState(bool SpeakersOn, bool Muted, bool FromMasterlink, bool Local);

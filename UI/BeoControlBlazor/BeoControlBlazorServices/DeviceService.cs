@@ -184,6 +184,9 @@ public class DeviceService : IDisposable
 
     public void SendCommand(string cmd, string? arg = null) => _device?.SendCommand(cmd, arg);
 
+    /// <summary>Speaker and routing state when a PC2 is connected, otherwise null.</summary>
+    public Pc2Adapter.Pc2RoutingState? Pc2Routing => (_device as Pc2Adapter.Pc2Device)?.Routing;
+
     public void UpdatePc2DefaultSource(Beoported.Pc2.Pc2DefaultSource defaultSource)
     {
         Settings.AudioSetup.DefaultSource = defaultSource;
