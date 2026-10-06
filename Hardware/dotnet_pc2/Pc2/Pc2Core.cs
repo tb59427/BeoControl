@@ -379,10 +379,13 @@ public sealed class Pc2Core : IDisposable
     {
         if (Beo4.TryGetSource(keycode, out var source))
         {
+            // Same routing as a Masterlink source started by command (RunCommand): play what
+            // comes from the bus, not the local PC input.
             GotoSource((byte)source);
-            Mixer.TransmitLocally(true); // maybe should be false?
-            Mixer.TransmitFromMl(true); // maybe should be false?
+            Mixer.TransmitLocally(false);
+            Mixer.TransmitFromMl(true);
             Mixer.SpeakerPower(true);
+            Mixer.SpeakerMute(false);
         }
         else if (keycode == Beo4Key.Mute)
             Mixer.SpeakerMute(!Mixer.SpeakersMuted);
