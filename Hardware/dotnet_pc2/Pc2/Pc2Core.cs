@@ -240,6 +240,7 @@ public sealed class Pc2Core : IDisposable
         }
         else if (cmd is "off" or "standby")
         {
+            Beolink.SendTelegram(DecodedTelegrams.Standby());
             Mixer.TransmitLocally(false);
             Mixer.TransmitFromMl(false);
             Mixer.SpeakerPower(false);
@@ -399,6 +400,7 @@ public sealed class Pc2Core : IDisposable
         }
         else if (keycode == Beo4Key.Standby)
         {
+            Beolink.SendTelegram(DecodedTelegrams.Standby());
             Mixer.TransmitLocally(false);
             Mixer.TransmitFromMl(false);
             Mixer.SpeakerPower(false);
