@@ -96,9 +96,14 @@ public static class DecodedTelegrams
             Type           = MasterlinkTelegram.TelegramType.Command,
             PldType        = MasterlinkTelegram.PayloadType.Beo4Key,
             PayloadVersion = 1,
-            Payload        = [sourceId, (byte)key],
+            // As a Beo4 in a link room sends it (measured: c1 2a 01 0a 00 00 00 0d 03 01 8d 1f 02,
+            // CD + step down); the trailing 0x02 is always there.
+            Payload        = [sourceId, (byte)key, 0x02],
         };
     }
+
+    /// <summary>Beo4 key release (0x7E), sent after a key like a Beo4 does when the button is let go.</summary>
+    public static MasterlinkTelegram Beo4KeyRelease(byte sourceId) => SendBeo4Key(sourceId, (Beo4Key)0x7E);
 
     /// <summary>Build a RELEASE broadcast to all nodes (triggers standby on all Masterlink devices).</summary>
     public static MasterlinkTelegram AllStandby()
