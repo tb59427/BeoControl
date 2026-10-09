@@ -13,6 +13,10 @@ builder.Services.AddScoped<BlazorSpotifyService>();
 builder.Services.AddScoped<ISpotifyService>(sp => sp.GetRequiredService<BlazorSpotifyService>());
 builder.Services.AddSingleton<IAutostartRegistrationService, UnsupportedAutostartRegistrationService>();
 
+// HTTP API: enums as text (e.g. "defaultSource": "PC")
+builder.Services.ConfigureHttpJsonOptions(o =>
+    o.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
+
 var app = builder.Build();
 var deviceService = app.Services.GetRequiredService<DeviceService>();
 await deviceService.AutoConnectAsync();
@@ -55,6 +59,8 @@ app.MapGet("/api/events", async (HttpContext ctx, DeviceService ds, Cancellation
 {
     ctx.Response.Headers.ContentType = "text/event-stream";
     ctx.Response.Headers.CacheControl = "no-cache";
+    var jsonOptions = ctx.RequestServices
+        .GetRequiredService<Microsoft.Extensions.Options.IOptions<Microsoft.AspNetCore.Http.Json.JsonOptions>>().Value.SerializerOptions;
     var wake = System.Threading.Channels.Channel.CreateBounded<bool>(1);
     void OnChanged(BeoControl.Interfaces.StatusMessage _) => wake.Writer.TryWrite(true);
     ds.OnStatusChanged += OnChanged;
@@ -64,8 +70,7 @@ app.MapGet("/api/events", async (HttpContext ctx, DeviceService ds, Cancellation
         var lastWrite = DateTime.UtcNow;
         while (!ct.IsCancellationRequested)
         {
-            var json = System.Text.Json.JsonSerializer.Serialize(Snapshot(ds),
-                new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+            var json = System.Text.Json.JsonSerializer.Serialize(Snapshot(ds), jsonOptions);
             if (json != last)
             {
                 await ctx.Response.WriteAsync($"data: {json}\n\n", ct);
