@@ -184,6 +184,9 @@ public class DeviceService : IDisposable
 
     public void SendCommand(string cmd, string? arg = null) => _device?.SendCommand(cmd, arg);
 
+    /// <summary>Last source the device reported (e.g. "cd", "pc"), or null.</summary>
+    public SourceStatusMessage? LastSource { get; private set; }
+
     /// <summary>Speaker and routing state when a PC2 is connected, otherwise null.</summary>
     public Pc2Adapter.Pc2RoutingState? Pc2Routing => (_device as Pc2Adapter.Pc2Device)?.Routing;
 
@@ -297,6 +300,8 @@ public class DeviceService : IDisposable
 
     private void OnDeviceStatusChanged(StatusMessage msg)
     {
+        if (msg is SourceStatusMessage source)
+            LastSource = source;
         if (msg is AudioSetupMessage setup)
         {
             SyncPc2AudioSetup(ToAudioSetup(setup), save: true);
