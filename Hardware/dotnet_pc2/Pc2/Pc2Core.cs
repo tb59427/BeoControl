@@ -271,7 +271,11 @@ public sealed class Pc2Core : IDisposable
         }
         else if (KeyFromCommand(cmd) is Beo4Key key)
         {
-            Beolink.SendTelegram(DecodedTelegrams.SendBeo4Key(0x00, key));
+            // Like a Beo4 in a link room: key for the running source, then the key release.
+            // The audio master ignores keys without a source (e.g. track up/down for CD).
+            Beolink.SendTelegram(DecodedTelegrams.SendBeo4Key(_currentSource, key));
+            Thread.Sleep(200);
+            Beolink.SendTelegram(DecodedTelegrams.Beo4KeyRelease(_currentSource));
         }
         else
         {
@@ -282,10 +286,12 @@ public sealed class Pc2Core : IDisposable
 
     /// <summary>Send a GOTO_SOURCE telegram on the Masterlink bus.</summary>
     private byte? _mlSource;   // last Masterlink source the PC2 requested
+    private byte _currentSource;   // Masterlink source playing (requested or reported), 0 = unknown
 
     public void GotoSource(byte mlSourceId, byte trackOrPreset = 0)
     {
         _mlSource = mlSourceId;
+        _currentSource = mlSourceId;
         var tgram = DecodedTelegrams.GotoSource(mlSourceId, trackOrPreset);
         Beolink.SendTelegram(tgram);
     }
@@ -347,6 +353,9 @@ public sealed class Pc2Core : IDisposable
                     mlt = MasterlinkTelegram.Parse(tgram);
                     if (mlt.Type == MasterlinkTelegram.TelegramType.Status)
                     {
+                        if (mlt.PldType is MasterlinkTelegram.PayloadType.StatusInfo or MasterlinkTelegram.PayloadType.TrackInfoLong
+                            && mlt.Payload.Length > 1 && SourceNames.CommandFromId(mlt.Payload[1]) is not null)
+                            _currentSource = mlt.Payload[1];
                         if (mlt.Payload.Length > 1)
                         {
                             var channel = mlt.Payload.Length > 2 && mlt.Payload[2] > 0 && mlt.Payload[2] != 255
