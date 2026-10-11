@@ -128,6 +128,8 @@ public class DeviceService : IDisposable
         {
             ReplaceDevice(null);
             var device = new Pc2Device(Settings.ToAudioSetup());
+            if (Pc2DebugLog.Path is { } logPath)
+                device.OnLog += m => Pc2DebugLog.Write(logPath, m);
             await device.Connect();
             ReplaceDevice(device);
             PersistDevice();
