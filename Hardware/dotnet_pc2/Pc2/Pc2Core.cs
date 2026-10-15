@@ -137,12 +137,18 @@ public sealed class Pc2Core : IDisposable
         // ── "pc" = local PC audio source (no Masterlink telegram) ────────
         if (cmd == "pc")
         {
+            // Leaving the Masterlink source: tell the audio master, like standby does.
+            if (Mixer.TransmittingFromMl)
+                Beolink.SendTelegram(DecodedTelegrams.Standby());
             Mixer.TransmitLocally(true);
             Mixer.TransmitFromMl(false);
             Mixer.SpeakerPower(true);
         }
         else if (cmd == "on")
         {
+            // Back from the local input: request the Masterlink source again (released by "pc").
+            if (Mixer.TransmittingLocally && !Mixer.TransmittingFromMl && _mlSource is byte mlSource)
+                GotoSource(mlSource);
             Mixer.TransmitLocally(false);
             Mixer.TransmitFromMl(true);
             Mixer.SpeakerPower(true);
@@ -240,6 +246,7 @@ public sealed class Pc2Core : IDisposable
         }
         else if (cmd is "off" or "standby")
         {
+            Beolink.SendTelegram(DecodedTelegrams.Standby());
             Mixer.TransmitLocally(false);
             Mixer.TransmitFromMl(false);
             Mixer.SpeakerPower(false);
@@ -269,8 +276,11 @@ public sealed class Pc2Core : IDisposable
     }
 
     /// <summary>Send a GOTO_SOURCE telegram on the Masterlink bus.</summary>
+    private byte? _mlSource;   // last Masterlink source the PC2 requested
+
     public void GotoSource(byte mlSourceId, byte trackOrPreset = 0)
     {
+        _mlSource = mlSourceId;
         var tgram = DecodedTelegrams.GotoSource(mlSourceId, trackOrPreset);
         Beolink.SendTelegram(tgram);
     }
@@ -399,6 +409,7 @@ public sealed class Pc2Core : IDisposable
         }
         else if (keycode == Beo4Key.Standby)
         {
+            Beolink.SendTelegram(DecodedTelegrams.Standby());
             Mixer.TransmitLocally(false);
             Mixer.TransmitFromMl(false);
             Mixer.SpeakerPower(false);
