@@ -292,7 +292,11 @@ public sealed class Pc2Core : IDisposable
         }
         else if (KeyFromCommand(cmd) is Beo4Key key)
         {
-            Beolink.SendTelegram(DecodedTelegrams.SendBeo4Key(0x00, key));
+            // Like a Beo4 in a link room: key for the running source, then the key release.
+            // The audio master ignores keys without a source (e.g. track up/down for CD).
+            Beolink.SendTelegram(DecodedTelegrams.SendBeo4Key(_currentSource, key));
+            Thread.Sleep(200);
+            Beolink.SendTelegram(DecodedTelegrams.Beo4KeyRelease(_currentSource));
         }
         else
         {
