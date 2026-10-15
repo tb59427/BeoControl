@@ -52,6 +52,11 @@ public sealed class Pc2Core : IDisposable
         Beolink.TelegramReceived = t => OnTelegram?.Invoke(t);
         Beolink.StartupSourceDetect = _ =>
         {
+            // The first AUDIO_BUS answer can arrive long after startup (e.g. on the first source
+            // change when nothing played at startup). Apply the default source only if nothing
+            // has chosen a source since; otherwise it would switch a playing ML source to PC.
+            if (Mixer.TransmittingLocally || Mixer.TransmittingFromMl)
+                return;
             switch (AudioSetup.DefaultSource)
             {
                 case Pc2DefaultSource.PC:
@@ -388,10 +393,13 @@ public sealed class Pc2Core : IDisposable
     {
         if (Beo4.TryGetSource(keycode, out var source))
         {
+            // Same routing as a Masterlink source started by command (RunCommand): play what
+            // comes from the bus, not the local PC input.
             GotoSource((byte)source);
-            Mixer.TransmitLocally(true); // maybe should be false?
-            Mixer.TransmitFromMl(true); // maybe should be false?
+            Mixer.TransmitLocally(false);
+            Mixer.TransmitFromMl(true);
             Mixer.SpeakerPower(true);
+            Mixer.SpeakerMute(false);
         }
         else if (keycode == Beo4Key.Mute)
             Mixer.SpeakerMute(!Mixer.SpeakersMuted);
