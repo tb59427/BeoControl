@@ -85,6 +85,21 @@ public sealed class Pc2Core : IDisposable
     /// <summary>Update the audio parameters used when activating a source.</summary>
     public void SetAudioSetup(AudioSetup setup) => AudioSetup = setup;
 
+    /// <summary>
+    /// Before switching the speakers on from off: set the PC2 up again and forget the
+    /// routing we believe it has. The PC2 loses node, address filter and routing when it
+    /// loses power, and doesn't announce it -- without this it ignores every command
+    /// until BeoControl is restarted.
+    /// </summary>
+    private void EnsureReady()
+    {
+        if (Mixer.SpeakersOn)
+            return;
+        Init();
+        Device.SetAddressFilter(AddressMask);
+        Mixer.ForgetState();
+    }
+
     private void Init()
     {
         Device.SendMessage([0xF1]);             // INIT
@@ -137,12 +152,15 @@ public sealed class Pc2Core : IDisposable
         // ── "pc" = local PC audio source (no Masterlink telegram) ────────
         if (cmd == "pc")
         {
-            Mixer.TransmitLocally(true);
+            EnsureReady();
+            // Masterlink off first, then local on: no moment with both mixed.
             Mixer.TransmitFromMl(false);
+            Mixer.TransmitLocally(true);
             Mixer.SpeakerPower(true);
         }
         else if (cmd == "on")
         {
+            EnsureReady();
             Mixer.TransmitLocally(false);
             Mixer.TransmitFromMl(true);
             Mixer.SpeakerPower(true);
@@ -151,6 +169,7 @@ public sealed class Pc2Core : IDisposable
         // ── Any other named Masterlink source ─────────────────────────────
         else if (SourceIdFromName(cmd) is byte mlSourceId)
         {
+            EnsureReady();
             GotoSource(mlSourceId, (byte)arg);
             Mixer.TransmitLocally(false);
             Mixer.TransmitFromMl(true);
@@ -378,6 +397,7 @@ public sealed class Pc2Core : IDisposable
     {
         if (Beo4.TryGetSource(keycode, out var source))
         {
+            EnsureReady();
             GotoSource((byte)source);
             Mixer.TransmitLocally(true); // maybe should be false?
             Mixer.TransmitFromMl(true); // maybe should be false?
