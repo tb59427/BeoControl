@@ -90,6 +90,21 @@ public sealed class Pc2Core : IDisposable
     /// <summary>Update the audio parameters used when activating a source.</summary>
     public void SetAudioSetup(AudioSetup setup) => AudioSetup = setup;
 
+    /// <summary>
+    /// Before switching the speakers on from off: set the PC2 up again and forget the
+    /// routing we believe it has. The PC2 loses node, address filter and routing when it
+    /// loses power, and doesn't announce it -- without this it ignores every command
+    /// until BeoControl is restarted.
+    /// </summary>
+    private void EnsureReady()
+    {
+        if (Mixer.SpeakersOn)
+            return;
+        Init();
+        Device.SetAddressFilter(AddressMask);
+        Mixer.ForgetState();
+    }
+
     private void Init()
     {
         Device.SendMessage([0xF1]);             // INIT
@@ -143,10 +158,13 @@ public sealed class Pc2Core : IDisposable
         if (cmd == "pc")
         {
             // Leaving the Masterlink source: tell the audio master, like standby does.
+            // Decided before EnsureReady(), which forgets the believed routing.
             if (Mixer.TransmittingFromMl)
                 Beolink.SendTelegram(DecodedTelegrams.Standby());
-            Mixer.TransmitLocally(true);
+            EnsureReady();
+            // Masterlink off first, then local on: no moment with both mixed.
             Mixer.TransmitFromMl(false);
+            Mixer.TransmitLocally(true);
             Mixer.SpeakerPower(true);
         }
         else if (cmd == "on")
@@ -154,6 +172,7 @@ public sealed class Pc2Core : IDisposable
             // Back from the local input: request the Masterlink source again (released by "pc").
             if (Mixer.TransmittingLocally && !Mixer.TransmittingFromMl && _mlSource is byte mlSource)
                 GotoSource(mlSource);
+            EnsureReady();
             Mixer.TransmitLocally(false);
             Mixer.TransmitFromMl(true);
             Mixer.SpeakerPower(true);
@@ -162,6 +181,7 @@ public sealed class Pc2Core : IDisposable
         // ── Any other named Masterlink source ─────────────────────────────
         else if (SourceIdFromName(cmd) is byte mlSourceId)
         {
+            EnsureReady();
             GotoSource(mlSourceId, (byte)arg);
             Mixer.TransmitLocally(false);
             Mixer.TransmitFromMl(true);
@@ -404,6 +424,7 @@ public sealed class Pc2Core : IDisposable
         {
             // Same routing as a Masterlink source started by command (RunCommand): play what
             // comes from the bus, not the local PC input.
+            EnsureReady();
             GotoSource((byte)source);
             Mixer.TransmitLocally(false);
             Mixer.TransmitFromMl(true);
